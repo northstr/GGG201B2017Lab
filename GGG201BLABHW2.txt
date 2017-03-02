@@ -1,0 +1,130 @@
+The two assemblies (without filtering and with filtering) do not differ in their quast output (117 contains in both with similar N50 and L50 results). This is explained by  trimmomatics result that shows approximately 99.83 % of the reads were in pair and only few were orphan reads.
+
+
+Command Lines:
+
+DATA:
+# Download E. coli data 
+mkdir ~/work
+cd ~/work
+curl -O -L https://s3.amazonaws.com/public.ged.msu.edu/ecoli_ref-5m.fastq.gz
+# Look at data 
+
+gunzip -c ecoli_ref-5m.fastq.gz | head
+
+
+
+# Install khmer
+pip install khmer==2.0
+
+SPLITTING:
+# Split 5 million reads 
+
+gunzip -c ecoli_ref-5m.fastq.gz | head -20000000 | \
+    split-paired-reads.py -1 top.R1.fq -2 top.R2.fq
+
+
+# Look at head of R1 and R2 
+head top.R1.fq
+head top.R2.fq
+
+TRIMMING:
+#Install Trimmomatric
+sudo apt-get -y install trimmomatic
+#Downloading adapters
+wget https://anonscm.debian.org/cgit/debian-med/trimmomatic.git/plain/adapters/TruSeq3-PE.fa
+#Run trimmomatric: 
+
+
+
+TrimmomaticPE top.R1.fq top.R2.fq top.R1.paired.fq top.R1.unpaired.fq top.R2.paired.fq top.R2.unpaired.fq ILLUMINACLIP:TruSeq3-PE.fa:2:40:15 LEADING:2 TRAILING:2 SLIDINGWINDOW:4:2 MINLEN:25
+
+
+output of this command was:
+
+
+Input Read Pairs: 2500000 Both Surviving: 2495801 (99.83%) Forward Only Surviving: 3712 (0.15%) Reverse Only Surviving: 461 (0.02%)
+Dropped: 26 (0.00%)
+
+
+
+INTERLEAVING: 
+# Interleave reads 
+interleave-reads.py top.R1.paired.fq top.R2.paired.fq > top-aftertrim.fq
+
+output of this command was:
+
+final: interleaved 2495801 pairs
+
+# Look at head of interleaved file
+head top-aftertrim.fq
+
+
+ASSEMBLY:
+# Install megahit 
+git clone https://github.com/voutcn/megahit.git
+cd megahit
+make -j 4
+
+#change directory form megahit directory to work directory (so that the interleaved file can be read by the megabit)
+mkdir ~/work
+cd ~/work
+
+
+# Run the assembler
+
+
+~/megahit/megahit --12 top-aftertrim.fq -o ecolifinal
+
+STAT  or output of assembly 
+
+[STAT] 117 contigs, total 4577356 bp, min 220 bp, max 246618 bp, avg 39123 bp, N50 105709 bp
+
+
+# save the assembly 
+cp ecolifinal/final.contigs.fa ecolifinal-assembly.fa
+# Looking at the assembly
+head ecolifinal-assembly.fa
+
+QUAST:
+# Measuring the assembly, install quast
+cd ~/
+git clone https://github.com/ablab/quast.git -b release_4.2
+export PYTHONPATH=$(pwd)/quast/libs/
+# Measuring the assembly, run quast
+cd ~/work
+~/quast/quast.py ecolifinal-assembly.fa -o ecolifinal_report
+
+python2.7 ~/quast/quast.py ecolifinal-assembly.fa -o ecolifinal_report
+
+
+see output of this command 
+work >> ecolifinal_report >> report.txt
+
+
+All statistics are based on contigs of size >= 500 bp, unless otherwise noted (e.g., "# contigs (>= 0 bp)" and "Total length (>= 0 bp)" include all contigs).
+
+Assembly                    ecolifinal-assembly
+# contigs (>= 0 bp)         117                
+# contigs (>= 1000 bp)      91                 
+# contigs (>= 5000 bp)      69                 
+# contigs (>= 10000 bp)     64                 
+# contigs (>= 25000 bp)     52                 
+# contigs (>= 50000 bp)     32                 
+Total length (>= 0 bp)      4577356            
+Total length (>= 1000 bp)   4565024            
+Total length (>= 5000 bp)   4508189            
+Total length (>= 10000 bp)  4470978            
+Total length (>= 25000 bp)  4296011            
+Total length (>= 50000 bp)  3578706            
+# contigs                   101                
+Largest contig              246618             
+Total length                4571902            
+GC (%)                      50.74              
+N50                         105709             
+N75                         53842              
+L50                         15                 
+L75                         30                 
+# N's per 100 kbp           0.00  
+
+
